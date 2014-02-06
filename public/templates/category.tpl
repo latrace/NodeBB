@@ -8,6 +8,10 @@
 </ol>
 
 <div>
+{category_description}
+</div>
+
+<div>
 	<!-- IF privileges.write -->
 	<button id="new_post" class="btn btn-primary {show_topic_button}">[[category:new_topic_button]]</button>
 	<!-- ENDIF privileges.write -->
