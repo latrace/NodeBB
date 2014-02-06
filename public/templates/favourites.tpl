@@ -1,17 +1,15 @@
-<div class="well favourites">
-	<div class="account-username-box" data-userslug="{userslug}">
-		<span class="account-username">
-			<a href="{relative_path}/user/{userslug}">{username}</a> <i class="fa fa-chevron-right"></i>
-			<a href="{relative_path}/user/{userslug}/favourites">[[topic:favourites]]</a>
-		</span>
-	</div>
+<div class="account-username-box clearfix" data-userslug="{userslug}">
 
-	<!-- IF show_nofavourites -->
-		<div id="no-favourites-notice" class="alert alert-warning">[[topic:favourites.has_no_favourites]]</div>
-	<!-- ENDIF show_nofavourites -->
+</div>
+
+<div class="well favourites">
+
+	<!-- IF !posts.length -->
+		<div class="alert alert-warning">[[topic:favourites.has_no_favourites]]</div>
+	<!-- ENDIF !posts.length -->
 
 	<div class="row">
-		<div class="col-md-12 user-favourite-posts">
+		<div class="col-md-12 user-favourite-posts" data-nextstart="{nextStart}">
 			<!-- BEGIN posts -->
 			<div class="topic-row panel panel-default clearfix">
 				<div class="panel-body">
@@ -42,3 +40,6 @@
 		</div>
 	</div>
 </div>
+
+<input type="hidden" template-variable="yourid" value="{yourid}" />
+<input type="hidden" template-variable="theirid" value="{theirid}" />
