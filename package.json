@@ -60,7 +60,8 @@
     "nodebb-plugin-sso-google": "~0.1.0"
   },
   "devDependencies": {
-    "mocha": "~1.13.0"
+    "mocha": "~1.13.0",
+    "nodebb-plugin-emailer-mandrill": "0.0.3"
   },
   "bugs": {
     "url": "https://github.com/designcreateplay/NodeBB/issues"

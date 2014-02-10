@@ -64,11 +64,12 @@ SocketAdmin.user.createUser = function(socket, user, callback) {
 SocketAdmin.user.banUser = function(socket, theirid) {
 	admin.user.banUser(socket.uid, theirid, socket, function(isBanned) {
 		if(isBanned) {
-			if(index.userSockets[theirid]) {
-				for(var i=0; i<index.userSockets[theirid].length; ++i) {
-					index.userSockets[theirid][i].emit('event:banned');
-				}
+			var sockets = index.getUserSockets(theirid);
+
+			for(var i=0; i<sockets.length; ++i) {
+				sockets[i].emit('event:banned');
 			}
+
 			module.parent.exports.logoutUser(theirid);
 		}
 	});
@@ -185,6 +186,17 @@ SocketAdmin.categories.getPrivilegeSettings = function(socket, cid, callback) {
 					});
 				}
 			});
+		},
+		"mods": function(next) {
+			groups.getByGroupName('cid:' + cid + ':privileges:mods', { expand: true }, function(err, groupObj) {
+				if (!err) {
+					next.apply(this, arguments);
+				} else {
+					next(null, {
+						members: []
+					});
+				}
+			});
 		}
 	}, function(err, data) {
 		if(err) {
@@ -193,7 +205,8 @@ SocketAdmin.categories.getPrivilegeSettings = function(socket, cid, callback) {
 
 		callback(null, {
 			"+r": data['+r'].members,
-			"+w": data['+w'].members
+			"+w": data['+w'].members,
+			"mods": data['mods'].members
 		});
 	});
 };

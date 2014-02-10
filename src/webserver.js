@@ -25,9 +25,9 @@ var path = require('path'),
 	admin = require('./routes/admin'),
 	userRoute = require('./routes/user'),
 	apiRoute = require('./routes/api'),
+	feedsRoute = require('./routes/feeds'),
 	auth = require('./routes/authentication'),
 	meta = require('./meta'),
-	feed = require('./feed'),
 	plugins = require('./plugins'),
 	logger = require('./logger'),
 	templates = require('./../public/src/templates'),
@@ -88,10 +88,10 @@ module.exports.server = server;
 					property: 'keywords',
 					content: meta.config.keywords || ''
 				}],
-				defaultLinkTags = [{
+				defaultLinkTags = [/*{
 					rel: 'apple-touch-icon',
 					href: meta.config['brand:logo'] || nconf.get('relative_path') + '/logo.png'
-				}],
+				}*/],
 				templateValues = {
 					bootswatchCSS: meta.config['theme:src'],
 					pluginCSS: plugins.cssFiles.map(function(file) { return { path: nconf.get('relative_path') + file.replace(/\\/g, '/') }; }),
@@ -415,8 +415,20 @@ module.exports.server = server;
 			templates.logout = parsedTemplate;
 		});
 
-		winston.info('NodeBB Ready');
-		server.listen(nconf.get('PORT') || nconf.get('port'), nconf.get('bind_address'));
+		server.on("error", function(e){
+			if (e.code === 'EADDRINUSE') {
+				winston.error('NodeBB address in use, exiting...');
+				process.exit(1);
+			} else {
+				throw e;
+			}
+		});
+
+		var port = nconf.get('PORT') || nconf.get('port');
+		winston.info('NodeBB attempting to listen on: ' + ((nconf.get('bind_address') === "0.0.0.0" || !nconf.get('bind_address')) ? '0.0.0.0' : nconf.get('bind_address')) + ':' + port);
+		server.listen(port, nconf.get('bind_address'), function(){
+			winston.info('NodeBB Ready');
+		});
 	};
 
 	app.create_route = function (url, tpl) { // to remove
@@ -434,6 +446,7 @@ module.exports.server = server;
 		admin.createRoutes(app);
 		userRoute.createRoutes(app);
 		apiRoute.createRoutes(app);
+		feedsRoute.createRoutes(app);
 
 		// Basic Routes (entirely client-side parsed, goal is to move the rest of the crap in this file into this one section)
 		(function () {
@@ -516,45 +529,6 @@ module.exports.server = server;
 
 		app.get('/topic/:topic_id/:slug?', function (req, res, next) {
 			var tid = req.params.topic_id;
-
-			if (tid.match(/^\d+\.rss$/)) {
-				tid = tid.slice(0, -4);
-				var rssPath = path.join(__dirname, '../', 'feeds/topics', tid + '.rss'),
-					loadFeed = function () {
-						fs.readFile(rssPath, function (err, data) {
-							if (err) {
-								res.type('text').send(404, "Unable to locate an rss feed at this location.");
-							} else {
-								res.type('xml').set('Content-Length', data.length).send(data);
-							}
-						});
-
-					};
-
-				ThreadTools.privileges(tid, ((req.user) ? req.user.uid || 0 : 0), function(err, privileges) {
-					if(err) {
-						return next(err);
-					}
-
-					if(!privileges.read) {
-						return res.redirect('403');
-					}
-
-					if (!fs.existsSync(rssPath)) {
-						feed.updateTopic(tid, function (err) {
-							if (err) {
-								res.redirect('/404');
-							} else {
-								loadFeed();
-							}
-						});
-					} else {
-						loadFeed();
-					}
-				});
-
-				return;
-			}
 
 			async.waterfall([
 				function(next) {
@@ -699,45 +673,6 @@ module.exports.server = server;
 		app.get('/category/:category_id/:slug?', function (req, res, next) {
 			var cid = req.params.category_id;
 
-			if (cid.match(/^\d+\.rss$/)) {
-				cid = cid.slice(0, -4);
-				var rssPath = path.join(__dirname, '../', 'feeds/categories', cid + '.rss'),
-					loadFeed = function () {
-						fs.readFile(rssPath, function (err, data) {
-							if (err) {
-								res.type('text').send(404, "Unable to locate an rss feed at this location.");
-							} else {
-								res.type('xml').set('Content-Length', data.length).send(data);
-							}
-						});
-
-					};
-
-				CategoryTools.privileges(cid, ((req.user) ? req.user.uid || 0 : 0), function(err, privileges) {
-					if(err) {
-						return next(err);
-					}
-
-					if(!privileges.read) {
-						return res.redirect('403');
-					}
-
-					if (!fs.existsSync(rssPath)) {
-						feed.updateCategory(cid, function (err) {
-							if (err) {
-								res.redirect('/404');
-							} else {
-								loadFeed();
-							}
-						});
-					} else {
-						loadFeed();
-					}
-				});
-
-				return;
-			}
-
 			async.waterfall([
 				function(next) {
 					CategoryTools.privileges(cid, ((req.user) ? req.user.uid || 0 : 0), function(err, privileges) {
@@ -859,34 +794,6 @@ module.exports.server = server;
 					"Disallow: /admin/\n" +
 					"Sitemap: " + nconf.get('url') + "/sitemap.xml");
 			}
-		});
-
-		app.get('/recent.rss', function(req, res) {
-			var rssPath = path.join(__dirname, '../', 'feeds/recent.rss');
-
-			if (!fs.existsSync(rssPath)) {
-				feed.updateRecent(function (err) {
-					if (err) {
-						res.redirect('/404');
-					} else {
-						feed.loadFeed(rssPath, res);
-					}
-				});
-			} else {
-				feed.loadFeed(rssPath, res);
-			}
-		});
-
-		app.get('/popular.rss', function(req, res) {
-			var rssPath = path.join(__dirname, '../', 'feeds/popular.rss');
-
-			feed.updatePopular(function (err) {
-				if (err) {
-					res.redirect('/404');
-				} else {
-					feed.loadFeed(rssPath, res);
-				}
-			});
 		});
 
 		app.get('/recent/:term?', function (req, res) {

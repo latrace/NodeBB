@@ -13,7 +13,7 @@
 
 <div>
 	<!-- IF privileges.write -->
-	<button id="new_post" class="btn btn-primary {show_topic_button}">[[category:new_topic_button]]</button>
+	<button id="new_post" class="btn btn-primary">[[category:new_topic_button]]</button>
 	<!-- ENDIF privileges.write -->
 	<!-- IF !disableSocialButtons -->
 	<div class="inline-block pull-right">
@@ -26,9 +26,11 @@
 
 <hr/>
 
-<div class="alert alert-warning hide {no_topics_message}" id="category-no-topics">
+<!-- IF !topics.length -->
+<div class="alert alert-warning" id="category-no-topics">
 	[[category:no_topics]]
 </div>
+<!-- ENDIF !topics.length -->
 
 <div class="category row">
 	<div class="{topic_row_size}">
@@ -98,7 +100,8 @@
 		<!-- ENDIF usePagination -->
 	</div>
 
-	<div class="col-md-3 col-xs-12 {show_sidebar} category-sidebar">
+	<!-- IF topics.length -->
+	<div class="col-md-3 col-xs-12 category-sidebar">
 		<div class="panel panel-default">
 			<div class="panel-heading">[[category:sidebar.recent_replies]]</div>
 			<div class="panel-body recent-replies">
@@ -133,6 +136,7 @@
 		</div>
 		<!-- END sidebars -->
 	</div>
+	<!-- ENDIF topics.length -->
 </div>
 
 <input type="hidden" template-variable="category_id" value="{category_id}" />

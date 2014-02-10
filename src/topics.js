@@ -15,7 +15,6 @@ var async = require('async'),
 	threadTools = require('./threadTools'),
 	postTools = require('./postTools'),
 	notifications = require('./notifications'),
-	feed = require('./feed'),
 	favourites = require('./favourites'),
 	meta = require('./meta');
 
@@ -56,8 +55,6 @@ var async = require('async'),
 				db.sortedSetAdd('categories:' + cid + ':tid', timestamp, tid);
 				db.incrObjectField('category:' + cid, 'topic_count');
 				db.incrObjectField('global', 'topicCount');
-
-				feed.updateCategory(cid);
 
 				callback(null, tid);
 			});
@@ -155,15 +152,6 @@ var async = require('async'),
 				posts.create(uid, tid, content, next);
 			},
 			function(postData, next) {
-				db.getObjectField('tid:lastFeedUpdate', tid, function(err, lastFeedUpdate) {
-					var now = Date.now();
-					if(!lastFeedUpdate || parseInt(lastFeedUpdate, 10) < now - 3600000) {
-						feed.updateTopic(tid);
-						db.setObjectField('tid:lastFeedUpdate', tid, now);
-					}
-				});
-
-				feed.updateRecent();
 				threadTools.notifyFollowers(tid, postData.pid, uid);
 				user.sendPostNotificationToFollowers(uid, tid, postData.pid);
 
@@ -188,6 +176,7 @@ var async = require('async'),
 			},
 			function(postData, next) {
 				postData.favourited = false;
+				postData.votes = 0;
 				postData.display_moderator_tools = true;
 				postData.display_move_tools = privileges.admin || privileges.moderator;
 				postData.relativeTime = utils.toISOString(postData.timestamp);
@@ -341,6 +330,12 @@ var async = require('async'),
 				});
 			}
 
+			function getVoteStatusData(next) {
+				favourites.getVoteStatusByPostIDs(pids, current_user, function(vote_data) {
+					next(null, vote_data);
+				})
+			}
+
 			function addUserInfoToPosts(next) {
 				function iterator(post, callback) {
 					posts.addUserInfoToPost(post, function() {
@@ -370,17 +365,21 @@ var async = require('async'),
 				}
 			}
 
-			async.parallel([getFavouritesData, addUserInfoToPosts, getPrivileges], function(err, results) {
+			async.parallel([getFavouritesData, addUserInfoToPosts, getPrivileges, getVoteStatusData], function(err, results) {
 				if(err) {
 					return callback(err);
 				}
 
 				var fav_data = results[0],
-					privileges = results[2];
+					privileges = results[2],
+					voteStatus = results[3];
 
 				for (var i = 0; i < postData.length; ++i) {
 					var pid = postData[i].pid;
 					postData[i].favourited = fav_data[pid];
+					postData[i].upvoted = voteStatus[pid].upvoted;
+					postData[i].downvoted = voteStatus[pid].downvoted;
+					postData[i].votes = postData[i].votes || 0;
 					postData[i].display_moderator_tools = (current_user != 0) && privileges[pid].editable;
 					postData[i].display_move_tools = privileges[pid].move;
 					if(parseInt(postData[i].deleted, 10) === 1 && !privileges[pid].view_deleted) {
@@ -393,16 +392,19 @@ var async = require('async'),
 		});
 	}
 
-	Topics.getPageCount = function(tid, callback) {
+	Topics.getPageCount = function(tid, uid, callback) {
 		db.sortedSetCard('tid:' + tid + ':posts', function(err, postCount) {
 			if(err) {
 				return callback(err);
 			}
 
-			var postsPerPage = parseInt(meta.config.postsPerPage, 10);
-			postsPerPage = postsPerPage ? postsPerPage : 20;
+			user.getSettings(uid, function(err, settings) {
+				if(err) {
+					return callback(err);
+				}
 
-			callback(null, Math.ceil(parseInt(postCount, 10) / postsPerPage));
+				callback(null, Math.ceil(parseInt(postCount, 10) / settings.postsPerPage));
+			});
 		});
 	}
 
@@ -591,7 +593,6 @@ var async = require('async'),
 	Topics.getUnreadTopics = function(uid, start, stop, callback) {
 		var unreadTopics = {
 			'show_sidebar': 'hidden',
-			'show_topic_button': 'hidden',
 			'show_markallread_button': 'show',
 			'no_topics_message': 'hidden',
 			'topics': []
@@ -647,8 +648,7 @@ var async = require('async'),
 		var	websockets = require('./socket.io');
 
 		if (!uids) {
-			clients = websockets.getConnectedClients();
-			uids = Object.keys(clients);
+			uids = websockets.getConnectedClients();
 		} else if (!Array.isArray(uids)) {
 			uids = [uids];
 		}
@@ -812,7 +812,7 @@ var async = require('async'),
 			}
 
 			function getPageCount(next) {
-				Topics.getPageCount(tid, next);
+				Topics.getPageCount(tid, current_user, next);
 			}
 
 			async.parallel([getTopicData, getTopicPosts, getPrivileges, getCategoryData, getPageCount], function(err, results) {
@@ -1177,7 +1177,6 @@ var async = require('async'),
 		db.sortedSetRemove('topics:views', tid);
 
 		Topics.getTopicField(tid, 'cid', function(err, cid) {
-			feed.updateCategory(cid);
 			db.incrObjectFieldBy('category:' + cid, 'topic_count', -1);
 		});
 	}
@@ -1191,7 +1190,6 @@ var async = require('async'),
 		});
 
 		Topics.getTopicField(tid, 'cid', function(err, cid) {
-			feed.updateCategory(cid);
 			db.incrObjectFieldBy('category:' + cid, 'topic_count', 1);
 		});
 	}

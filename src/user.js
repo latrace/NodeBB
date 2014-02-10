@@ -184,6 +184,47 @@ var bcrypt = require('bcryptjs'),
 		});
 	};
 
+	User.getSettings = function(uid, callback) {
+		function sendDefaultSettings() {
+			callback(null, {
+				showemail: false,
+				usePagination: parseInt(meta.config.usePagination, 10) !== 0,
+				topicsPerPage: parseInt(meta.config.topicsPerPage, 10) || 20,
+				postsPerPage: parseInt(meta.config.postsPerPage, 10) || 10
+			});
+		}
+
+		if(!parseInt(uid, 10)) {
+			return sendDefaultSettings();
+		}
+
+		db.getObject('user:' + uid + ':settings', function(err, settings) {
+			if(err) {
+				return callback(err);
+			}
+
+			if(!settings) {
+				return sendDefaultSettings();
+			}
+
+			settings.showemail = parseInt(settings.showemail, 10) !== 0;
+			settings.usePagination = parseInt(settings.usePagination, 10) !== 0;
+			settings.topicsPerPage = parseInt(settings.topicsPerPage, 10);
+			settings.postsPerPage = parseInt(settings.postsPerPage, 10);
+
+			callback(null, settings);
+		});
+	}
+
+	User.saveSettings = function(uid, data, callback) {
+		db.setObject('user:' + uid + ':settings', {
+			showemail: data.showemail || 0,
+			usePagination: data.usePagination || 0,
+			topicsPerPage: data.topicsPerPage || 20,
+			postsPerPage: data.postsPerPage || 10
+		}, callback);
+	}
+
 	User.updateProfile = function(uid, data, callback) {
 
 		var fields = ['username', 'email', 'fullname', 'website', 'location', 'birthday', 'signature'];
@@ -409,7 +450,7 @@ var bcrypt = require('bcryptjs'),
 			function getUserData(uid, callback) {
 				User.getUserData(uid, function(err, userData) {
 					if(!userData.status) {
-						userData.status = 'offline';
+						userData.status = 'online';
 					}
 
 					User.isAdministrator(uid, function(err, isAdmin) {
@@ -753,11 +794,11 @@ var bcrypt = require('bcryptjs'),
 	};
 
 	User.isModerator = function(uid, cid, callback) {
-		db.isSetMember('cid:' + cid + ':moderators', uid, function(err, exists) {
+		groups.isMemberByGroupName(uid, 'cid:' + cid + ':privileges:mod', function(err, isMember) {
 			if(err) {
 				return calback(err);
 			}
-			callback(err, exists);
+			callback(err, isMember);
 		});
 	};
 
